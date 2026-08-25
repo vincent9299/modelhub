@@ -44,6 +44,7 @@ modelhub/
 ├── install.sh                     # 建 .venv + 装依赖（自动挑 Python 3.11~3.13）
 ├── start.sh                       # 一键启动: 静态代理(幂等) + 网关 + 代理注入
 ├── stop.sh                        # 停网关; --all 连静态代理一起停
+├── restart.sh                     # 重启网关(重载 .env + 重跑自动发现); --all 连静态代理重启
 ├── smoke.sh                       # 冒烟: 代理链路/静态出口验证/网关健康/--call 真实调用
 ├── gateway/
 │   ├── litellm.yaml               # 路由模板（凭据全走 env 注入，可入库）
@@ -154,7 +155,7 @@ Cline 设置里选 **OpenAI Compatible**：
 
 ### `gateway/litellm.yaml`（路由模板）
 
-凭据全部 `os.environ/` 注入。加固定模型 = 在 `model_list` 加一条后 `bash stop.sh && bash start.sh`。
+凭据全部 `os.environ/` 注入。加固定模型 = 在 `model_list` 加一条后 `bash restart.sh`。
 
 ### 新增一个上游端点
 
@@ -173,7 +174,7 @@ Cline 设置里选 **OpenAI Compatible**：
    > 注意：`openai/*` 通配会把 litellm 内置的整个 OpenAI 目录展开进 `/v1/models`（清单有噪音）。优先用第 2 步的自动发现；通配只适合「要按任意名字直调、不在乎清单」的场景。
 
 4. 端点域名若需静态出口（AI 商风控）：`static_proxy/config.yaml` rules 加 `DOMAIN-SUFFIX,xxx.com,STATIC`；否则 modelhub 视角直连（继承宿主策略），无需任何配置；
-5. `bash stop.sh && bash start.sh` 生效。
+5. `bash restart.sh` 生效（自动重跑模型发现）。
 
 ### `static_proxy/config.yaml`（静态代理，机密不入库）
 
@@ -193,6 +194,8 @@ Cline 设置里选 **OpenAI Compatible**：
 ```bash
 bash smoke.sh                # 零花费体检（含静态链路命中验证）
 bash smoke.sh --call         # 加真实调用
+bash start.sh                # 启动: 静态代理(幂等) + 网关 + 自动发现, 全后台
+bash restart.sh              # 改 .env 后重载: 停网关→重新加载→重跑自动发现→起网关
 bash stop.sh                 # 停网关（保留静态代理）
 bash stop.sh --all           # 全停
 tail -f logs/gateway.log     # 网关日志（请求/报错）
