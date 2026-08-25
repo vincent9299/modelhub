@@ -12,5 +12,6 @@ logs/
 *.log
 static_proxy/cache.db
 static_proxy/config.runtime.yaml
+gateway/.litellm.runtime.yaml
 __pycache__/
 *.pyc

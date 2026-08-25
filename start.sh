@@ -19,6 +19,7 @@ fi
 export VLLM_API_BASE="${VLLM_API_BASE:-http://localhost:8000/v1}"
 export VLLM_API_KEY="${VLLM_API_KEY:-EMPTY}"
 export GALAXY_API_BASE="${GALAXY_API_BASE:-https://token.ai-galaxy.com/v1}"
+export OPENROUTER_API_BASE="${OPENROUTER_API_BASE:-https://openrouter.ai/api/v1}"
 export GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
 export GATEWAY_PORT="${GATEWAY_PORT:-4000}"
 PROXY_MIXED_PORT="${PROXY_MIXED_PORT:-7891}"
@@ -32,8 +33,13 @@ if [ ! -x .venv/bin/litellm ]; then
     bash install.sh || exit 1
 fi
 
+# 3.5 模型自动发现: 探测各 *_API_BASE 端点的 /models 列表,
+#     并入配置生成 gateway/.litellm.runtime.yaml（凭据仍走 env 注入）
+./.venv/bin/python gateway/gen_local_models.py || true
+
 # 4. 进程级代理注入: 网关进程的外发流量按域名进 mihomo 分流
-#    （openrouter 等 AI API 域名 → STATIC 静态出口; 见 static_proxy/config.yaml rules）
+#    （AI API 域名 → STATIC 静态出口, 名单见 static_proxy/config.yaml;
+#      其余上游对 modelhub 而言直连, 宿主机策略自行叠加, modelhub 不感知）
 #    no_proxy 保证本地 vLLM 与 Galaxy 专线直连, 不绕代理
 unset all_proxy ALL_PROXY
 export http_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
@@ -51,12 +57,12 @@ if [ -f logs/gateway.pid ] && kill -0 "$(cat logs/gateway.pid)" 2>/dev/null; the
     echo "⚠️  发现僵死网关进程 (PID $(cat logs/gateway.pid)), 清理后重启..."
     kill "$(cat logs/gateway.pid)" 2>/dev/null
     sleep 1
-    pkill -9 -f "litellm --config gateway/litellm.yaml" 2>/dev/null
+    pkill -9 -f "litellm --config gateway/" 2>/dev/null
     rm -f logs/gateway.pid
 fi
 
 # 6. 启动网关
-nohup ./.venv/bin/litellm --config gateway/litellm.yaml --host "$GATEWAY_HOST" --port "$GATEWAY_PORT" \
+nohup ./.venv/bin/litellm --config gateway/.litellm.runtime.yaml --host "$GATEWAY_HOST" --port "$GATEWAY_PORT" \
     >> logs/gateway.log 2>&1 &
 echo $! > logs/gateway.pid
 
@@ -65,7 +71,8 @@ for i in $(seq 1 30); do
     if curl -sf -m 2 "http://$GATEWAY_HOST:$GATEWAY_PORT/health/liveliness" >/dev/null 2>&1; then
         echo "✅ 网关已启动 (PID: $(cat logs/gateway.pid))"
         echo "   OpenAI 兼容端点: http://$GATEWAY_HOST:$GATEWAY_PORT/v1"
-        echo "   路由: 本地 vLLM / Galaxy 直连; openrouter/* → 静态代理出口"
+        echo "   模型清单(含自动发现): http://$GATEWAY_HOST:$GATEWAY_PORT/v1/models"
+        echo "   出口: AI API 域名 → 静态出口; 其余直连(继承宿主策略)"
         echo "   冒烟: bash smoke.sh [--call]"
         exit 0
     fi

@@ -21,16 +21,18 @@
                                                                  │ http(s)_proxy
                                                                  ▼
                                              mihomo (127.0.0.1:7891, rule 分流)
-                                                ┌────────────────┼──────────────┐
-                                                ▼                ▼              ▼
-                                             STATIC           TUNNEL        DIRECT
-                                           (双层链式)        (单层隧道)     (国内 GEOIP)
+                                                ┌────────────────┴──────────────┐
+                                                ▼                               ▼
+                                             STATIC                          DIRECT
+                                       (双层链式, 静态出口)        (其余全部: modelhub 不感知)
                                                 │
                                                 ▼
                             Tunnel 10808(换海外源IP) → 静态IP节点 → 出口=静态住宅IP
 ```
 
 **为什么静态出口要双层**：静态 IP 节点对来源 IP 有风控，只放行海外源 IP；国内机器直连被拒（403），必须先经 Tunnel 隧道把源 IP 换成海外，再连静态节点。
+
+**modelhub 只维护「AI API 域名 → STATIC」这一层规则**（名单在 `static_proxy/config.yaml`）；其余流量对 modelhub 而言都是直连（DIRECT），继承宿主机自己的网络策略——宿主机若另有一层路由规则，modelhub 不感知、不维护。
 
 ## 目录结构
 
@@ -44,7 +46,9 @@ modelhub/
 ├── stop.sh                        # 停网关; --all 连静态代理一起停
 ├── smoke.sh                       # 冒烟: 代理链路/静态出口验证/网关健康/--call 真实调用
 ├── gateway/
-│   └── litellm.yaml               # 模型路由（全走环境变量注入凭据，可入库）
+│   ├── litellm.yaml               # 路由模板（凭据全走 env 注入，可入库）
+│   ├── gen_local_models.py        # 模型自动发现: 探测各端点 /models, 并入运行时配置
+│   └── .litellm.runtime.yaml      # 启动时生成的运行时配置（不入库）
 ├── static_proxy/
 │   ├── config.example.yaml        # mihomo 配置模板（可入库）
 │   ├── config.yaml                # 真实节点配置（含凭据，不入库）
@@ -112,31 +116,70 @@ export LLM_MODEL=openrouter/openai/gpt-4o-mini
 
 | 路由 | 模型名 | 出口 | 备注 |
 |---|---|---|---|
-| 本地 vLLM | `qwen3.8-27b` | 直连 localhost:8000 | 需本机先起 vLLM 服务 |
-| Galaxy | `qwen3.7-plus` | 直连（no_proxy） | 现有产线同款 |
+| 本地端点（自动发现） | `vllm/<模型id>` | 直连 | 启动时探测端点 /models 自动注册 |
+| 本地 vLLM 稳定别名 | `qwen3.8-27b` | 直连 localhost:8000 | 存量脚本短名；需本机先起 vLLM 服务 |
+| Galaxy | `qwen3.7-plus` / `galaxy/<模型id>` | 直连（no_proxy） | 固定别名 + 自动发现 |
 | OpenRouter | `openrouter/<org>/<model>` | **静态住宅 IP** | 通配路由, 任意 OR 模型免配置 |
 
+### Cline / IDE 客户端（自动带出模型列表）
+
+Cline 设置里选 **OpenAI Compatible**：
+
+- Base URL: `http://127.0.0.1:4000/v1`
+- API Key: 任意非空字符串（网关仅本机监听、不校验 key）
+- 模型: 直接刷新列表——网关 `GET /v1/models` 返回全部可用模型（含自动发现的上游模型）
+
 ## 配置说明
+
+端点地址与 key 全部可配置（`.env`），改完重启网关即生效；模型列表由自动发现带出，无需手填。
 
 ### `.env`（机密，不入库）
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `OPENROUTER_API_KEY` | — | 必填 |
+| `OPENROUTER_API_BASE` | `https://openrouter.ai/api/v1` | OR 端点 |
 | `GALAXY_API_KEY` | — | 必填 |
-| `VLLM_API_BASE` | `http://localhost:8000/v1` | 本地 vLLM 端点 |
 | `GALAXY_API_BASE` | `https://token.ai-galaxy.com/v1` | Galaxy 端点 |
+| `VLLM_API_BASE` | `http://localhost:8000/v1` | 本地 OpenAI 兼容端点（vLLM 等） |
+| `VLLM_API_KEY` | `EMPTY` | vLLM 默认无鉴权 |
 | `GATEWAY_HOST` / `GATEWAY_PORT` | `127.0.0.1` / `4000` | 网关监听（要跨机共享改 `0.0.0.0` 并自行加防火墙） |
 | `PROXY_MIXED_PORT` / `PROXY_API_PORT` | `7891` / `9091` | 与 `static_proxy/config.yaml` 保持一致 |
 
-### `gateway/litellm.yaml`（模型路由）
+> 约定：任何 `<前缀>_API_BASE` / `<前缀>_API_KEY` 变量对都会被自动发现器扫描（下节）。
 
-三条路由的凭据全部 `os.environ/` 注入。加模型 = 在 `model_list` 加一条后 `bash stop.sh && bash start.sh`。
+### 模型自动发现（`/v1/models`）
+
+`start.sh` 启动时跑 `gateway/gen_local_models.py`：探测 `.env` 里每个 `*_API_BASE` 端点的 OpenAI 兼容 `/models` 列表，把发现的模型以 `<前缀>/<模型id>`（如 `vllm//tank/models/Qwen3.8-27B`、`galaxy/qwen3.8-max`）并入运行时配置 `gateway/.litellm.runtime.yaml`（生成物，不入库；凭据仍走 env 注入）。`openrouter/*` 通配由 litellm 原生展开；无 /models 列表的端点由模板里的固定别名兜底。客户端配置网关地址后即自动带出可用模型。
+
+### `gateway/litellm.yaml`（路由模板）
+
+凭据全部 `os.environ/` 注入。加固定模型 = 在 `model_list` 加一条后 `bash stop.sh && bash start.sh`。
+
+### 新增一个上游端点
+
+1. `.env` 加 `X_API_BASE` / `X_API_KEY`（X 任意前缀，如 `TOGETHER`）；
+2. 端点若提供 `/models` 列表 → 零额外配置：下次启动自动发现，以 `x/<模型id>` 注册进 `/v1/models`；
+3. 不提供（或想通配直调任意名）→ 在 `gateway/litellm.yaml` 加一块：
+
+   ```yaml
+   - model_name: "x/*"
+     litellm_params:
+       model: "openai/*"          # OpenAI 兼容透传
+       api_base: os.environ/X_API_BASE
+       api_key: os.environ/X_API_KEY
+   ```
+
+   > 注意：`openai/*` 通配会把 litellm 内置的整个 OpenAI 目录展开进 `/v1/models`（清单有噪音）。优先用第 2 步的自动发现；通配只适合「要按任意名字直调、不在乎清单」的场景。
+
+4. 端点域名若需静态出口（AI 商风控）：`static_proxy/config.yaml` rules 加 `DOMAIN-SUFFIX,xxx.com,STATIC`；否则 modelhub 视角直连（继承宿主策略），无需任何配置；
+5. `bash stop.sh && bash start.sh` 生效。
 
 ### `static_proxy/config.yaml`（静态代理，机密不入库）
 
 - 要让新域名走静态出口：在 `rules:` 顶部加 `- DOMAIN-SUFFIX,xxx.com,STATIC`，然后 `bash static_proxy/stop.sh && bash static_proxy/start.sh`。
 - 换隧道/静态节点：改 `proxies:` 段（双层结构别拆：静态节点必须 `dialer-proxy` 挂隧道）。
+- 记住边界：modelhub 只维护「AI 域名 → STATIC」；其余 MATCH,DIRECT 表示 modelhub 视角直连，宿主机自己的路由策略与 modelhub 无关。
 
 ## 机密与 git 策略
 
@@ -170,4 +213,5 @@ curl -s http://127.0.0.1:9091/connections | jq   # mihomo 实时连接（看 cha
 | OpenRouter 仍 403/风控 | 确认 smoke 链路命中 Static 组；静态 IP 订阅是否到期；换节点后重启代理 |
 | 端口冲突 | 网关改 `.env` 的 `GATEWAY_PORT`；mihomo 改 config.yaml 的 mixed-port/external-controller/dns listen 并同步 `.env` |
 | 其他程序想用静态代理 | 直接 `export http_proxy=http://127.0.0.1:7891 https_proxy=http://127.0.0.1:7891`，无需经过网关 |
+| `/v1/models` 里没有想要的模型 | 端点无 /models 列表（用固定别名）或 vLLM 未起；看 start.sh 启动时「模型自动发现」输出 |
 

@@ -55,7 +55,7 @@ sleep 2
 MIXED_PORT=$(awk '/^mixed-port:/{print $2}' "$DIR/config.yaml"); MIXED_PORT=${MIXED_PORT:-7891}
 if nc -z -w 3 127.0.0.1 "$MIXED_PORT" 2>/dev/null; then
     echo "✅ 静态代理已启动 (PID: $(cat "$PID_FILE"), mixed 端口 $MIXED_PORT, 仅本机)"
-    echo "   AI API 域名 → STATIC 静态出口; 其他国外 → TUNNEL; 国内 → DIRECT"
+    echo "   AI API 域名 → STATIC 双层静态出口; 其余直连 (继承宿主策略, modelhub 不感知)"
     echo "   日志: $LOG"
 else
     echo "❌ 启动失败, 查看日志: $LOG"

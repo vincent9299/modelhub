@@ -16,7 +16,7 @@ if [ -f logs/gateway.pid ] && kill -0 "$(cat logs/gateway.pid)" 2>/dev/null; the
     rm -f logs/gateway.pid
     echo "✅ 网关已停止 (PID $PID)"
 else
-    pkill -f "litellm --config gateway/litellm.yaml" 2>/dev/null \
+    pkill -f "litellm --config gateway/" 2>/dev/null \
         && echo "✅ 网关已停止 (按进程名)" || echo "ℹ️  网关未在运行"
     rm -f logs/gateway.pid
 fi

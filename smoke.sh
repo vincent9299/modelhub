@@ -51,8 +51,33 @@ if [ -n "$CHAINS" ]; then
 else
     bad "未捕捉到 openrouter 连接（请求可能失败, 看 logs/mihomo.log）"
 fi
-TIP=$(curl -s -m 10 -x "http://127.0.0.1:$PROXY_MIXED_PORT" https://api.ipify.org 2>/dev/null)
-[ -n "$TIP" ] && ok "TUNNEL 组出口 (ipify 经代理): $TIP" || note "ipify 验证失败（不影响 STATIC 链路判定）"
+# 非 AI 流量: 对 modelhub 而言直连(继承宿主策略) —— 验证链路为 DIRECT, 且未误入 STATIC
+( curl -s -m 8 -x "http://127.0.0.1:$PROXY_MIXED_PORT" -o /dev/null "https://api.ipify.org" & ) >/dev/null 2>&1
+DCHAINS=""
+for i in $(seq 1 12); do
+    sleep 0.5
+    DCHAINS=$(curl -s -m 3 "http://127.0.0.1:$PROXY_API_PORT/connections" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+hits = []
+for c in (d.get("connections") or []):
+    if "ipify" in str((c.get("metadata") or {}).get("host", "")):
+        hits.append(" > ".join(c.get("chains") or []))
+print("; ".join(hits))' 2>/dev/null)
+    [ -n "$DCHAINS" ] && break
+done
+if [ -n "$DCHAINS" ]; then
+    case "$DCHAINS" in
+        *Static*) bad "非 AI 流量被误路由进 STATIC 组: $DCHAINS" ;;
+        *DIRECT*) ok "非 AI 流量 modelhub 视角直连 (继承宿主策略): $DCHAINS" ;;
+        *)        note "非 AI 流量链路: $DCHAINS" ;;
+    esac
+else
+    note "未捕捉到非 AI 连接（不影响 STATIC 链路判定）"
+fi
 
 note "3. 网关健康"
 curl -sf -m 5 "$BASE/health/liveliness" >/dev/null && ok "liveliness OK" || bad "网关无响应 ($BASE)"
@@ -66,7 +91,7 @@ if [ "${1:-}" = "--call" ]; then
     IFS=',' read -ra ARR <<< "$CALL_MODELS"
     for M in "${ARR[@]}"; do
         R=$(curl -s -m 120 "$BASE/v1/chat/completions" -H 'Content-Type: application/json' \
-            -d "{\"model\":\"$M\",\"messages\":[{\"role\":\"user\",\"content\":\"只回复两个字: 收到\"}],\"max_tokens\":16}" 2>/dev/null)
+            -d "{\"model\":\"$M\",\"messages\":[{\"role\":\"user\",\"content\":\"只回复两个字: 收到\"}],\"max_tokens\":512}" 2>/dev/null)
         T=$(printf '%s' "$R" | python3 -c '
 import json, sys
 try:
