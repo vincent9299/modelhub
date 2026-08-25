@@ -1,0 +1,77 @@
+# ============================================
+# 静态出口代理（mihomo）配置模板
+# 用法: cp config.example.yaml config.yaml && 填入真实节点信息
+# 注意: config.yaml 已 gitignore（含节点凭据）, 永不入库
+#
+# 拓扑（双层链路）:
+#   你的进程 (http_proxy=127.0.0.1:7891)
+#     → mihomo 按域名分流
+#       → STATIC 组: Tunnel(换海外源IP) → 静态IP节点 → 目标站
+#       → TUNNEL 组: Tunnel 单层出口
+#       → 国内: DIRECT 直连
+# 为什么双层: 静态IP节点对来源IP有风控, 只放行海外源IP;
+#   国内机器直连会被拒(403), 须先经 Tunnel 换源IP再连静态节点
+# ============================================
+
+mixed-port: 7891
+allow-lan: false            # 只本机监听, 其他机器/应用无法使用
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: false
+external-controller: 127.0.0.1:9091
+external-ui: ""
+secret: ""
+
+# ============ DNS (配合GEOIP分流) ============
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver: [223.5.5.5, 119.29.29.29]
+  fallback: [8.8.8.8, 1.1.1.1]
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+
+# ============ 代理节点 ============
+proxies:
+  # 静态IP节点（核心）: 最终出口 = 静态住宅/ISP IP
+  - name: "Static-IP"
+    type: http
+    server: x.x.x.x            # 静态IP节点地址
+    port: 443
+    username: "FILL_ME"        # 节点认证
+    password: "FILL_ME"
+    dialer-proxy: "Tunnel"     # 关键: 跳板隧道链式出站, 让静态节点看到海外源IP
+
+  # 单层出墙隧道
+  - name: "Tunnel"
+    type: http
+    server: x.x.x.x            # 隧道/跳板地址
+    port: 10808
+
+# ============ 策略组 ============
+proxy-groups:
+  - name: "STATIC"
+    type: select
+    proxies: ["Static-IP"]
+  - name: "TUNNEL"
+    type: select
+    proxies: ["Tunnel"]
+
+# ============ 分流规则 ============
+rules:
+  # 需要静态出口的域名（按需增删; 命中即走双层静态IP）
+  - DOMAIN-SUFFIX,openai.com,STATIC
+  - DOMAIN-SUFFIX,openrouter.ai,STATIC
+  - DOMAIN-SUFFIX,anthropic.com,STATIC
+  - DOMAIN-SUFFIX,chatgpt.com,STATIC
+  - DOMAIN-SUFFIX,claude.ai,STATIC
+  - DOMAIN-SUFFIX,azure.com,STATIC
+  - DOMAIN-SUFFIX,microsoft.com,STATIC
+  # 国内直连
+  - GEOIP,CN,DIRECT
+  # 其余国外 → 单层隧道
+  - MATCH,TUNNEL

@@ -1,0 +1,76 @@
+#!/bin/bash
+# ============================================
+# modelhub 一键启动: 静态代理(幂等) + LiteLLM 网关
+# 用法: bash start.sh
+# 停止: bash stop.sh          # 只停网关
+#       bash stop.sh --all    # 网关 + 静态代理一起停
+# ============================================
+set -u
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR"
+mkdir -p logs
+
+# 1. 加载 .env（密钥与可选配置; 不存在则用默认值继续）
+if [ -f .env ]; then
+    set -a; . ./.env; set +a
+else
+    echo "⚠️  未找到 .env, 按默认值继续（参考 .env.example 创建）"
+fi
+export VLLM_API_BASE="${VLLM_API_BASE:-http://localhost:8000/v1}"
+export VLLM_API_KEY="${VLLM_API_KEY:-EMPTY}"
+export GALAXY_API_BASE="${GALAXY_API_BASE:-https://token.ai-galaxy.com/v1}"
+export GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
+export GATEWAY_PORT="${GATEWAY_PORT:-4000}"
+PROXY_MIXED_PORT="${PROXY_MIXED_PORT:-7891}"
+
+# 2. 静态代理（幂等; 已在运行则跳过）
+bash static_proxy/start.sh || exit 1
+
+# 3. 网关环境检查（未装则先装）
+if [ ! -x .venv/bin/litellm ]; then
+    echo "ℹ️  未检测到 litellm, 先运行 install.sh ..."
+    bash install.sh || exit 1
+fi
+
+# 4. 进程级代理注入: 网关进程的外发流量按域名进 mihomo 分流
+#    （openrouter 等 AI API 域名 → STATIC 静态出口; 见 static_proxy/config.yaml rules）
+#    no_proxy 保证本地 vLLM 与 Galaxy 专线直连, 不绕代理
+unset all_proxy ALL_PROXY
+export http_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
+export https_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
+GALAXY_HOST=$(printf '%s' "$GALAXY_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')
+VLLM_HOST=$(printf '%s' "$VLLM_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')
+export no_proxy="localhost,127.0.0.1,${GALAXY_HOST},${VLLM_HOST},192.168.10.0/24,100.64.0.0/10"
+
+# 5. 幂等: 网关已在运行（pid 活着且健康才跳过; pid 活但不健康 = 僵死, 清理后重启）
+if [ -f logs/gateway.pid ] && kill -0 "$(cat logs/gateway.pid)" 2>/dev/null; then
+    if curl -sf -m 2 "http://$GATEWAY_HOST:$GATEWAY_PORT/health/liveliness" >/dev/null 2>&1; then
+        echo "✅ 网关已在运行 (PID: $(cat logs/gateway.pid), $GATEWAY_HOST:$GATEWAY_PORT)"
+        exit 0
+    fi
+    echo "⚠️  发现僵死网关进程 (PID $(cat logs/gateway.pid)), 清理后重启..."
+    kill "$(cat logs/gateway.pid)" 2>/dev/null
+    sleep 1
+    pkill -9 -f "litellm --config gateway/litellm.yaml" 2>/dev/null
+    rm -f logs/gateway.pid
+fi
+
+# 6. 启动网关
+nohup ./.venv/bin/litellm --config gateway/litellm.yaml --host "$GATEWAY_HOST" --port "$GATEWAY_PORT" \
+    >> logs/gateway.log 2>&1 &
+echo $! > logs/gateway.pid
+
+# 7. 等待就绪（litellm 首次启动较慢, 给足 60s）
+for i in $(seq 1 30); do
+    if curl -sf -m 2 "http://$GATEWAY_HOST:$GATEWAY_PORT/health/liveliness" >/dev/null 2>&1; then
+        echo "✅ 网关已启动 (PID: $(cat logs/gateway.pid))"
+        echo "   OpenAI 兼容端点: http://$GATEWAY_HOST:$GATEWAY_PORT/v1"
+        echo "   路由: 本地 vLLM / Galaxy 直连; openrouter/* → 静态代理出口"
+        echo "   冒烟: bash smoke.sh [--call]"
+        exit 0
+    fi
+    sleep 2
+done
+echo "❌ 网关 60s 内未就绪, 查看日志: logs/gateway.log"
+tail -20 logs/gateway.log
+exit 1

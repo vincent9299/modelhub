@@ -1,0 +1,33 @@
+# ============================================
+# modelhub LiteLLM 网关配置
+# 三条路由:
+#   1. 本地 vLLM      —— 直连(经 no_proxy 绕过代理)
+#   2. Galaxy 专线     —— 直连(经 no_proxy 绕过代理)
+#   3. openrouter/*   —— 走静态代理出口(进程级代理环境变量, 由 start.sh 注入)
+# 全部凭据经环境变量注入(值在 .env, 由 start.sh 加载), 本文件可安全入库
+# ============================================
+
+model_list:
+  # ---- 本地 vLLM（OpenAI 兼容端点）----
+  - model_name: qwen3.8-27b
+    litellm_params:
+      model: openai/qwen3.8-27b
+      api_base: os.environ/VLLM_API_BASE
+      api_key: os.environ/VLLM_API_KEY
+
+  # ---- Galaxy 专线（qwen3.7-plus 现有产线, OpenAI 兼容）----
+  - model_name: qwen3.7-plus
+    litellm_params:
+      model: openai/qwen3.7-plus
+      api_base: os.environ/GALAXY_API_BASE
+      api_key: os.environ/GALAXY_API_KEY
+
+  # ---- OpenRouter 通配（所有 openrouter/* 走静态代理出口）----
+  - model_name: "openrouter/*"
+    litellm_params:
+      model: "openrouter/*"
+      api_key: os.environ/OPENROUTER_API_KEY
+
+litellm_settings:
+  drop_params: true        # 上游不支持的 sampling 参数自动丢弃, 减少 400
+  request_timeout: 600     # 长思考模型留足时间
