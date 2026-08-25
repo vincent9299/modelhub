@@ -206,6 +206,15 @@ curl -s http://127.0.0.1:9091/connections | jq   # mihomo 实时连接（看 cha
 
 升级 litellm：改 `requirements.txt` 版本号后 `bash install.sh`。
 
+## IDE 接入（Roo Code / Cline 等插件）
+
+| 插件 | Provider 类型 | Base URL | 说明 |
+|---|---|---|---|
+| Roo Code | LiteLLM | `http://127.0.0.1:4000`（**不带 `/v1`**） | Roo 的 LiteLLM provider 自己拼 `/v1/model/info`（源码 `fetchers/litellm.ts`），Base URL 带 `/v1` 会请求 `/v1/v1/model/info` 得 404 |
+| Cline 等 | OpenAI Compatible | `http://127.0.0.1:4000/v1` | 标准 OpenAI SDK 口径，与脚本接入一致 |
+
+API Key 随便填（如 `EMPTY`）：网关仅本机监听且未设 master key，不校验。Refresh Models 后从下拉选模型（如 `xiaoyao/deepseek-v4-flash-0731`、`qwen3.8-27b`）。
+
 ## FAQ
 
 | 现象 | 原因/处理 |
@@ -217,4 +226,5 @@ curl -s http://127.0.0.1:9091/connections | jq   # mihomo 实时连接（看 cha
 | 端口冲突 | 网关改 `.env` 的 `GATEWAY_PORT`；mihomo 改 config.yaml 的 mixed-port/external-controller/dns listen 并同步 `.env` |
 | 其他程序想用静态代理 | 直接 `export http_proxy=http://127.0.0.1:7891 https_proxy=http://127.0.0.1:7891`，无需经过网关 |
 | `/v1/models` 里没有想要的模型 | 端点无 /models 列表（用固定别名）或 vLLM 未起；看 start.sh 启动时「模型自动发现」输出 |
+| Roo Code Refresh Models 报 404 | LiteLLM provider 自拼 `/v1/model/info`，Base URL 必须**不带** `/v1`（填 `http://127.0.0.1:4000`）；见「IDE 接入」节 |
 
