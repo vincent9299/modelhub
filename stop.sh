@@ -16,8 +16,16 @@ if [ -f logs/gateway.pid ] && kill -0 "$(cat logs/gateway.pid)" 2>/dev/null; the
     rm -f logs/gateway.pid
     echo "✅ 网关已停止 (PID $PID)"
 else
-    pkill -f "litellm --config gateway/" 2>/dev/null \
-        && echo "✅ 网关已停止 (按进程名)" || echo "ℹ️  网关未在运行"
+    # macOS/Linux 兼容: pgrep -f 取 PID 再逐个 kill, 避免 pkill -f 匹配到自身/父进程
+    PIDS=$(pgrep -f "litellm --config gateway/" 2>/dev/null || true)
+    if [ -n "$PIDS" ]; then
+        kill $PIDS 2>/dev/null
+        sleep 1
+        kill -9 $PIDS 2>/dev/null
+        echo "✅ 网关已停止 (按进程名)"
+    else
+        echo "ℹ️  网关未在运行"
+    fi
     rm -f logs/gateway.pid
 fi
 

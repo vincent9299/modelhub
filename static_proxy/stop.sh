@@ -17,13 +17,22 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
     rm -f "$PID_FILE"
     echo "✅ 已停止 (PID $PID)"
 else
-    pkill -f "modelhub/static_proxy/mihomo" 2>/dev/null && echo "✅ 已停止 (按进程名)" || echo "ℹ️  未在运行"
+    # macOS/Linux 兼容: pgrep -f 取 PID 再逐个 kill, 避免 pkill -f 匹配到自身/父进程
+    PIDS=$(pgrep -f "modelhub/static_proxy/mihomo" 2>/dev/null || true)
+    if [ -n "$PIDS" ]; then
+        kill $PIDS 2>/dev/null
+        sleep 1
+        kill -9 $PIDS 2>/dev/null
+        echo "✅ 已停止 (按进程名)"
+    else
+        echo "ℹ️  未在运行"
+    fi
     rm -f "$PID_FILE"
 fi
 
 MIXED_PORT=$(awk '/^mixed-port:/{print $2}' "$DIR/config.yaml" 2>/dev/null); MIXED_PORT=${MIXED_PORT:-7891}
 if nc -z -w 2 127.0.0.1 "$MIXED_PORT" 2>/dev/null; then
-    echo "⚠️  $MIXED_PORT 端口仍在监听, 手动检查: ss -tlnp | grep $MIXED_PORT"
+    echo "⚠️  $MIXED_PORT 端口仍在监听, 手动检查: lsof -i :$MIXED_PORT"
 else
     echo "✅ $MIXED_PORT 端口已释放"
 fi

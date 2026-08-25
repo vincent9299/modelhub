@@ -2,7 +2,7 @@
 # ============================================
 # modelhub 环境安装: 建 .venv + 装 litellm[proxy]
 # 用法:
-#   bash install.sh                          # 自动挑 Python 3.9~3.12, pip 默认清华源
+#   bash install.sh                          # 自动挑 Python 3.11~3.13, pip 默认清华源
 #   PYTHON=/path/to/python bash install.sh   # 指定解释器
 #   PIP_INDEX_URL=https://pypi.org/simple bash install.sh   # 换 pip 源(需外网)
 # ============================================
@@ -35,5 +35,5 @@ if [ ! -x .venv/bin/python ]; then
 fi
 ./.venv/bin/pip install -U pip -i "$PIP_INDEX"
 ./.venv/bin/pip install -r requirements.txt -i "$PIP_INDEX"
-VER=$(./.venv/bin/python -c 'import litellm; print(litellm.__version__)')
+VER=$(./.venv/bin/litellm --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "?")
 echo "✅ 安装完成: litellm $VER （.venv/bin/litellm）"

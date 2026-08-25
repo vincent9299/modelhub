@@ -7,6 +7,7 @@ static_proxy/mihomo
 
 # ---- 运行时产物 ----
 .venv/
+venv13/
 logs/
 *.pid
 *.log
@@ -15,3 +16,11 @@ static_proxy/config.runtime.yaml
 gateway/.litellm.runtime.yaml
 __pycache__/
 *.pyc
+
+# ---- 本机守护脚本（不入库, 本地自愈用）----
+modelhub-daemon.sh
+start-gateway.sh
+
+# ---- macOS 杂项 ----
+.DS_Store
+local-start.sh

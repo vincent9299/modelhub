@@ -1,6 +1,6 @@
 # modelhub — LLM 网关 + 静态出口代理
 
-本地 LLM 基础设施二合一模块。**独立仓库**，可直接 push 到 GitHub；任何其他 Linux 机器 `git clone` 后按 [快速开始](#快速开始新机器) 三步即可复用。
+本地 LLM 基础设施二合一模块。**独立仓库**，可直接 push 到 GitHub；任何其他 Linux / macOS 机器 `git clone` 后按 [快速开始](#快速开始新机器) 三步即可复用。
 
 两个组件：
 
@@ -8,6 +8,8 @@
 |---|---|---|
 | **LiteLLM 网关** | `4000`（可配） | OpenAI 兼容统一入口，路由 本地 vLLM / Galaxy 专线 / OpenRouter |
 | **静态出口代理**（mihomo） | `7891` mixed / `9091` API | 按域名把 OpenRouter 等 AI API 流量送**静态住宅 IP** 出口，绕开 API 商对数据中心 IP 的风控；本地与 Galaxy 流量直连不进代理 |
+
+> 端口均为默认值，可在 `.env` / `static_proxy/config.yaml` 中整体改到其他端口（如与宿主机已有代理并存时，改用 7892/9092/1054 即可零冲突）。
 
 ## 拓扑
 
@@ -54,7 +56,7 @@ modelhub/
 │   ├── config.example.yaml        # mihomo 配置模板（可入库）
 │   ├── config.yaml                # 真实节点配置（含凭据，不入库）
 │   ├── start.sh / stop.sh         # mihomo 单独启停
-│   ├── fetch_mihomo.sh            # mihomo 二进制下载
+│   ├── fetch_mihomo.sh            # mihomo 二进制下载（自动识别 linux/darwin × amd64/arm64）
 │   └── country.mmdb               # GeoIP 库（GEOIP,CN,DIRECT 规则依赖，入库）
 └── logs/                          # 运行日志与 pid（不入库）
 ```
@@ -71,7 +73,7 @@ git push -u origin main
 
 ## 快速开始（新机器）
 
-前提：Linux + Python 3.11~3.13 + `curl`。
+前提：Linux / macOS + Python 3.11~3.13 + `curl`。
 
 ```bash
 git clone <本仓库地址> modelhub && cd modelhub
@@ -80,7 +82,7 @@ git clone <本仓库地址> modelhub && cd modelhub
 #    .env                      ← API keys（模板: .env.example）
 #    static_proxy/config.yaml  ← 静态代理节点凭据（模板: static_proxy/config.example.yaml）
 
-# 2) 获取 mihomo 二进制（二选一）
+# 2) 获取 mihomo 二进制（二选一；脚本自动识别平台架构, macOS Apple Silicon 也会下对版本）
 bash static_proxy/fetch_mihomo.sh        # GitHub releases 下载（国内机器可能需先 export https_proxy=...）
 # 或从旧机器拷贝:  scp 旧机:modelhub/static_proxy/mihomo static_proxy/
 
