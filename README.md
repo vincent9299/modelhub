@@ -147,7 +147,8 @@ Cline 设置里选 **OpenAI Compatible**：
 | `VLLM_API_BASE` | `http://localhost:8000/v1` | 本地 OpenAI 兼容端点（vLLM 等） |
 | `VLLM_API_KEY` | `EMPTY` | vLLM 默认无鉴权 |
 | `GATEWAY_HOST` / `GATEWAY_PORT` | `127.0.0.1` / `4000` | 网关监听（要跨机共享改 `0.0.0.0` 并自行加防火墙） |
-| `PROXY_MIXED_PORT` / `PROXY_API_PORT` | `7891` / `9091` | 与 `static_proxy/config.yaml` 保持一致 |
+
+> 静态代理端口不在 `.env`：唯一来源是 `static_proxy/config.yaml` 的 `mixed-port` / `external-controller`，脚本全部从它现读，改后 `bash restart.sh --all` 生效。
 
 > 约定：任何 `<前缀>_API_BASE` / `<前缀>_API_KEY` 变量对都会被自动发现器扫描（下节）。
 

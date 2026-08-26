@@ -12,7 +12,10 @@ cd "$DIR"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
 GATEWAY_PORT="${GATEWAY_PORT:-4000}"
+# 端口单一来源: static_proxy/config.yaml（mihomo 实际监听处）, 不吃 .env 配置
+PROXY_MIXED_PORT=$(awk '/^mixed-port:/{print $2; exit}' static_proxy/config.yaml 2>/dev/null)
 PROXY_MIXED_PORT="${PROXY_MIXED_PORT:-7891}"
+PROXY_API_PORT=$(awk '/^external-controller:/{sub(/.*:/,""); print; exit}' static_proxy/config.yaml 2>/dev/null)
 PROXY_API_PORT="${PROXY_API_PORT:-9091}"
 BASE="http://$GATEWAY_HOST:$GATEWAY_PORT"
 FAIL=0

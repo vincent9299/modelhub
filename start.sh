@@ -22,6 +22,9 @@ export GALAXY_API_BASE="${GALAXY_API_BASE:-https://token.ai-galaxy.com/v1}"
 export OPENROUTER_API_BASE="${OPENROUTER_API_BASE:-https://openrouter.ai/api/v1}"
 export GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
 export GATEWAY_PORT="${GATEWAY_PORT:-4000}"
+# 端口单一来源: static_proxy/config.yaml 的 mixed-port（mihomo 实际监听处）,
+# 不从 .env 读——两个定义处必然漂移, 漂移即全部外发上游静默 Connection error
+PROXY_MIXED_PORT=$(awk '/^mixed-port:/{print $2; exit}' static_proxy/config.yaml 2>/dev/null)
 PROXY_MIXED_PORT="${PROXY_MIXED_PORT:-7891}"
 
 # 2. 静态代理（幂等; 已在运行则跳过）
@@ -42,6 +45,9 @@ fi
 #      其余上游对 modelhub 而言直连, 宿主机策略自行叠加, modelhub 不感知）
 #    no_proxy 保证本地 vLLM 与 Galaxy 专线直连, 不绕代理
 unset all_proxy ALL_PROXY
+# litellm 的 --debug/--detailed_debug 旗标绑定同名环境变量,
+# 宿主环境残留的 DEBUG=* 值(如 'release')会让 CLI 解析直接报错, 启动前清掉
+unset DEBUG DETAILED_DEBUG
 export http_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
 export https_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
 GALAXY_HOST=$(printf '%s' "$GALAXY_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')

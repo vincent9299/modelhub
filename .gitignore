@@ -1,5 +1,6 @@
 # ---- 密钥与本机真实配置（永不入库；复用机器上从旧机拷贝或手填）----
 .env
+.env.bak-*
 static_proxy/config.yaml
 
 # ---- 二进制（过大不入库；fetch_mihomo.sh 下载或从旧机拷贝）----
