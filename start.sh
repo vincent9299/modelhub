@@ -36,11 +36,8 @@ if [ ! -x .venv/bin/litellm ]; then
     bash install.sh || exit 1
 fi
 
-# 3.5 模型自动发现: 探测各 *_API_BASE 端点的 /models 列表,
-#     并入配置生成 gateway/.litellm.runtime.yaml（凭据仍走 env 注入）
-./.venv/bin/python gateway/gen_local_models.py || true
-
-# 4. 进程级代理注入: 网关进程的外发流量按域名进 mihomo 分流
+# 3.5 进程级代理注入: 必须在模型发现之前——OpenRouter 等外网上游的 /models
+#     探测要走 mihomo 分流（直连不通）; 网关进程外发流量同样按域名分流
 #    （AI API 域名 → STATIC 静态出口, 名单见 static_proxy/config.yaml;
 #      其余上游对 modelhub 而言直连, 宿主机策略自行叠加, modelhub 不感知）
 #    no_proxy 保证本地 vLLM 与 Galaxy 专线直连, 不绕代理
@@ -53,6 +50,10 @@ export https_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
 GALAXY_HOST=$(printf '%s' "$GALAXY_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')
 VLLM_HOST=$(printf '%s' "$VLLM_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')
 export no_proxy="localhost,127.0.0.1,${GALAXY_HOST},${VLLM_HOST},192.168.10.0/24,100.64.0.0/10"
+
+# 4. 模型自动发现: 探测各 *_API_BASE 端点的 /models 列表（含 OpenRouter 全量展开）,
+#    并入配置生成 gateway/.litellm.runtime.yaml（凭据仍走 env 注入）
+./.venv/bin/python gateway/gen_local_models.py || true
 
 # 5. 幂等: 网关已在运行（pid 活着且健康才跳过; pid 活但不健康 = 僵死, 清理后重启）
 if [ -f logs/gateway.pid ] && kill -0 "$(cat logs/gateway.pid)" 2>/dev/null; then

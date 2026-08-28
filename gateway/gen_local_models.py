@@ -3,7 +3,8 @@
 
 扫描环境变量中的 *_API_BASE（start.sh 已加载 .env 并导出），逐个探测
 OpenAI 兼容的 /models 列表:
-  - openrouter 跳过（litellm 的 openrouter/* 通配原生展开, 无需代劳）;
+  - openrouter 同样显式展开全量目录（litellm 的 openrouter/* 通配展开
+    有 100 模型上限, 截断严重; 发现失败时兜底写回通配）;
   - 无 /models 列表的端点（如 Galaxy 返回 404）跳过, 由模板里的固定别名兜底。
 
 发现的模型以 <前缀>/<模型id> 命名并入 model_list（前缀 = 变量名去 _API_BASE
@@ -22,7 +23,6 @@ HERE = Path(__file__).resolve().parent
 BASE = HERE / "litellm.yaml"
 OUT = HERE / ".litellm.runtime.yaml"
 
-SKIP_PREFIXES = ("openrouter",)  # litellm 通配原生展开
 MAX_MODELS = 500
 
 
@@ -36,15 +36,13 @@ def discover():
             continue
         stem = k[: -len("_API_BASE")]
         prefix = stem.lower()
-        if prefix in SKIP_PREFIXES:
-            continue
         key = os.environ.get(stem + "_API_KEY", "")
         url = base.rstrip("/") + "/models"
         req = urllib.request.Request(url)
         if key:
             req.add_header("Authorization", f"Bearer {key}")
         try:
-            with urllib.request.urlopen(req, timeout=6) as r:
+            with urllib.request.urlopen(req, timeout=15) as r:
                 data = json.loads(r.read().decode("utf-8", "replace"))
             ids = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
         except Exception as e:
@@ -83,6 +81,22 @@ def main():
             )
             existing.add(name)
             added += 1
+
+    # openrouter 显式展开失败时兜底写回通配（litellm 原生展开, 但有 100 模型上限）
+    if os.environ.get("OPENROUTER_API_BASE") and not any(
+        str(m.get("model_name", "")).startswith("openrouter/") for m in model_list
+    ):
+        model_list.append(
+            {
+                "model_name": "openrouter/*",
+                "litellm_params": {
+                    "model": "openrouter/*",
+                    "api_base": "os.environ/OPENROUTER_API_BASE",
+                    "api_key": "os.environ/OPENROUTER_API_KEY",
+                },
+            }
+        )
+        print("   - openrouter: 发现失败, 兜底写回 openrouter/* 通配（展开有 100 模型上限）")
 
     OUT.write_text(
         yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8"

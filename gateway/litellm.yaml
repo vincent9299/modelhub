@@ -4,9 +4,10 @@
 # 端点与密钥全部经环境变量注入(值在 .env, 由 start.sh 加载), 本文件可安全入库。
 #
 # 模型自动识别（/v1/models 自动带出, Cline 等客户端配置网关地址即可用）:
-#   - openrouter/* 通配: litellm 原生展开上游全部模型目录;
-#   - OpenAI 兼容端点（vLLM/Galaxy 等）: 启动时由 gateway/gen_local_models.py
+#   - OpenAI 兼容端点（vLLM/Galaxy/OpenRouter 等）: 启动时由 gateway/gen_local_models.py
 #     探测其 /models 列表, 发现的模型以 <前缀>/<模型id> 注册;
+#     OpenRouter 也走显式全量展开（litellm 的 openrouter/* 通配展开有 100 模型
+#     上限, 截断严重, 已弃用; 发现失败时由脚本兜底写回通配）;
 #   - 固定别名路由是给存量脚本的稳定短名(调用名不变)。
 #
 # 出口策略(进程级代理环境变量由 start.sh 注入):
@@ -37,12 +38,7 @@ model_list:
       api_base: os.environ/GALAXY_API_BASE
       api_key: os.environ/GALAXY_API_KEY
 
-  # ---- OpenRouter 通配（/v1/models 自动展开全部 OR 模型; 走静态出口）----
-  - model_name: "openrouter/*"
-    litellm_params:
-      model: "openrouter/*"
-      api_base: os.environ/OPENROUTER_API_BASE
-      api_key: os.environ/OPENROUTER_API_KEY
+  # ---- OpenRouter（由 gen_local_models.py 显式全量展开为 openrouter/<id>; 走静态出口）----
 
 litellm_settings:
   drop_params: true        # 上游不支持的 sampling 参数自动丢弃, 减少 400
