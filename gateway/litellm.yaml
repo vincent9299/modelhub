@@ -38,6 +38,27 @@ model_list:
       api_base: os.environ/GALAXY_API_BASE
       api_key: os.environ/GALAXY_API_KEY
 
+  # ---- 固定别名: 上游 /models 目录不返回、自动发现抓不到的模型 ----
+  # openrouter images-API 专属模型（不进目录）:
+  - model_name: openrouter/openai/gpt-image-2
+    litellm_params:
+      model: openai/openai/gpt-image-2
+      api_base: os.environ/OPENROUTER_API_BASE
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: openrouter/microsoft/mai-image-2.5-pro
+    litellm_params:
+      model: openai/microsoft/mai-image-2.5-pro
+      api_base: os.environ/OPENROUTER_API_BASE
+      api_key: os.environ/OPENROUTER_API_KEY
+  # qianwen2 列表外模型（上游注册名 qwen-image-3.0-pro，调用名保持无点号）。
+  # compatible-mode chat 回包为 DashScope 原生格式（choices 空、图在 output），
+  # openai 兼容解析不可用，改走 litellm dashscope 原生 provider 的多模态生成端点:
+  - model_name: qianwen2/qwen-image-3-pro
+    litellm_params:
+      model: dashscope/qwen-image-3.0-pro
+      api_base: https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+      api_key: os.environ/QIANWEN2_API_KEY
+
   # ---- OpenRouter（由 gen_local_models.py 显式全量展开为 openrouter/<id>; 走静态出口）----
 
 litellm_settings:
