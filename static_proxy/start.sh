@@ -37,9 +37,9 @@ fi
 # 3. 上游隧道可达性检查（server/port 从 config.yaml 解析; 双层链路依赖它）
 TUNNEL_SERVER=$(awk '/name: "Tunnel/{f=1} f&&/server:/{print $2; exit}' "$DIR/config.yaml")
 TUNNEL_PORT=$(awk '/name: "Tunnel/{f=1} f&&/port:/{print $2; exit}' "$DIR/config.yaml")
-if [ -n "${TUNNEL_SERVER:-}" ] && command -v nc >/dev/null 2>&1; then
-    if ! nc -z -w 3 "$TUNNEL_SERVER" "${TUNNEL_PORT:-10808}" 2>/dev/null; then
-        echo "⚠️  上游隧道不可达: $TUNNEL_SERVER:${TUNNEL_PORT:-10808}（STATIC 双层链路依赖它）"
+if [ -n "${TUNNEL_SERVER:-}" ] && [ -n "${TUNNEL_PORT:-}" ] && command -v nc >/dev/null 2>&1; then
+    if ! nc -z -w 3 "$TUNNEL_SERVER" "$TUNNEL_PORT" 2>/dev/null; then
+        echo "⚠️  上游隧道不可达: $TUNNEL_SERVER:$TUNNEL_PORT（STATIC 双层链路依赖它）"
         echo "   若本机隧道拓扑不同请检查 config.yaml；仍继续启动..."
     fi
 fi

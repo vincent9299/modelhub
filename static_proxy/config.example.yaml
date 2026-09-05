@@ -46,10 +46,11 @@ proxies:
     dialer-proxy: "Tunnel"     # 关键: 跳板隧道链式出站, 让静态节点看到海外源IP
 
   # 首跳隧道（仅作 STATIC 双层链路的第一跳, 不是独立路由目标）
+  # 按机器拓扑填: 机房 HTTP 代理 / 自有隧道等, 只要能换出海外源 IP 即可
   - name: "Tunnel"
     type: http
     server: x.x.x.x            # 隧道/跳板地址
-    port: 10808
+    port: xxxx
 
 # ============ 策略组 ============
 proxy-groups:

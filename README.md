@@ -29,7 +29,7 @@
                                        (双层链式, 静态出口)        (其余全部: modelhub 不感知)
                                                 │
                                                 ▼
-                            Tunnel 10808(换海外源IP) → 静态IP节点 → 出口=静态住宅IP
+                            Tunnel 第一跳(换海外源IP,按机器拓扑填) → 静态IP节点 → 出口=静态住宅IP
 ```
 
 **为什么静态出口要双层**：静态 IP 节点对来源 IP 有风控，只放行海外源 IP；国内机器直连被拒（403），必须先经 Tunnel 隧道把源 IP 换成海外，再连静态节点。
@@ -224,7 +224,7 @@ API Key 随便填（如 `EMPTY`）：网关仅本机监听且未设 master key�
 |---|---|
 | `install.sh` 报无 Python 3.11~3.13 | litellm 1.98 需 3.11+（`typing.NotRequired`），3.14 依赖轮子不全；装 3.12 或 `PYTHON=/path` 指定 |
 | 网关 60s 未就绪 | 看 `logs/gateway.log`；常见是 `.env` 缺 key 或端口被占 |
-| smoke 第 2 步未命中 STATIC | 查 `static_proxy/config.yaml` rules 是否含该域名；隧道离线时先 `nc -z -w 3 <隧道IP> 10808` |
+| smoke 第 2 步未命中 STATIC | 查 `static_proxy/config.yaml` rules 是否含该域名；隧道离线时先 `nc -z -w 3 <隧道IP> <隧道端口>` |
 | OpenRouter 仍 403/风控 | 确认 smoke 链路命中 Static 组；静态 IP 订阅是否到期；换节点后重启代理 |
 | 端口冲突 | 网关改 `.env` 的 `GATEWAY_PORT`；mihomo 改 config.yaml 的 mixed-port/external-controller/dns listen 并同步 `.env` |
 | 其他程序想用静态代理 | 直接 `export http_proxy=http://127.0.0.1:7891 https_proxy=http://127.0.0.1:7891`，无需经过网关 |
