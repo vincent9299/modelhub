@@ -40,16 +40,16 @@ fi
 #     探测要走 mihomo 分流（直连不通）; 网关进程外发流量同样按域名分流
 #    （AI API 域名 → STATIC 静态出口, 名单见 static_proxy/config.yaml;
 #      其余上游对 modelhub 而言直连, 宿主机策略自行叠加, modelhub 不感知）
-#    no_proxy 保证本地 vLLM 与 Galaxy 专线直连, 不绕代理
+#    no_proxy 只留本地端点（vLLM 等）; 外网上游一律交 mihomo 按域名分流——
+#    宿主机无直连公网时, 直连豁免(no_proxy)等于断路（Galaxy 专线曾因此发现失败）
 unset all_proxy ALL_PROXY
 # litellm 的 --debug/--detailed_debug 旗标绑定同名环境变量,
 # 宿主环境残留的 DEBUG=* 值(如 'release')会让 CLI 解析直接报错, 启动前清掉
 unset DEBUG DETAILED_DEBUG
 export http_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
 export https_proxy="http://127.0.0.1:${PROXY_MIXED_PORT}"
-GALAXY_HOST=$(printf '%s' "$GALAXY_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')
 VLLM_HOST=$(printf '%s' "$VLLM_API_BASE" | sed -E 's|https?://([^/:]+).*|\1|')
-export no_proxy="localhost,127.0.0.1,${GALAXY_HOST},${VLLM_HOST},192.168.10.0/24,100.64.0.0/10"
+export no_proxy="localhost,127.0.0.1,${VLLM_HOST}"
 
 # 4. 模型自动发现: 探测各 *_API_BASE 端点的 /models 列表（含 OpenRouter 全量展开）,
 #    并入配置生成 gateway/.litellm.runtime.yaml（凭据仍走 env 注入）

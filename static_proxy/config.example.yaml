@@ -57,6 +57,11 @@ proxy-groups:
   - name: "STATIC"
     type: select
     proxies: ["Static-IP"]
+  # 仅第一跳(换海外源IP)不出静态出口: 给只需有网、不需静态IP 的域名用
+  # （如宿主机无直连公网时的国内 MaaS / 专线域名）
+  - name: "TUNNEL-ONLY"
+    type: select
+    proxies: ["Tunnel"]
 
 # ============ 分流规则（modelhub 只维护这一层）============
 rules:
@@ -68,5 +73,7 @@ rules:
   - DOMAIN-SUFFIX,claude.ai,STATIC
   - DOMAIN-SUFFIX,azure.com,STATIC
   - DOMAIN-SUFFIX,microsoft.com,STATIC
+  # 按需: 国内 MaaS / 专线域名走仅第一跳（例:
+  #  - DOMAIN-SUFFIX,ai-galaxy.com,TUNNEL-ONLY ）
   # 其余: 对 modelhub 而言直连（宿主机策略自行叠加, modelhub 不感知）
   - MATCH,DIRECT
