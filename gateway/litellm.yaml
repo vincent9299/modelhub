@@ -24,20 +24,6 @@ model_list:
   # .env 重启, 无需改这里。注意不用 openai/* 通配: 它会把 litellm 内置的
   # 整个 OpenAI 目录展开进 /v1/models, 污染清单。
 
-  # ---- 稳定短名别名（存量调用名不变）----
-  - model_name: qwen3.8-27b
-    litellm_params:
-      model: openai/qwen3.8-27b
-      api_base: os.environ/VLLM_API_BASE
-      api_key: os.environ/VLLM_API_KEY
-
-  # ---- Galaxy 专线（OpenAI 兼容; 固定别名保存量调用名, 自动发现另注册 galaxy/<模型id>）----
-  - model_name: qwen3.7-plus
-    litellm_params:
-      model: openai/qwen3.7-plus
-      api_base: os.environ/GALAXY_API_BASE
-      api_key: os.environ/GALAXY_API_KEY
-
   # ---- 固定别名: 上游 /models 目录不返回、自动发现抓不到的模型 ----
   # openrouter images-API 专属模型（不进目录）:
   - model_name: openrouter/openai/gpt-image-2

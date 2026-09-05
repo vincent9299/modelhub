@@ -31,7 +31,8 @@ else
 fi
 
 MIXED_PORT=$(awk '/^mixed-port:/{print $2}' "$DIR/config.yaml" 2>/dev/null); MIXED_PORT=${MIXED_PORT:-7891}
-if nc -z -w 2 127.0.0.1 "$MIXED_PORT" 2>/dev/null; then
+# 端口探测: bash 内建 /dev/tcp, 零外部依赖（nc 在精简容器里常缺失）
+if (exec 3<>"/dev/tcp/127.0.0.1/$MIXED_PORT") 2>/dev/null; then
     echo "⚠️  $MIXED_PORT 端口仍在监听, 手动检查: lsof -i :$MIXED_PORT"
 else
     echo "✅ $MIXED_PORT 端口已释放"
