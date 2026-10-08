@@ -39,6 +39,8 @@ def discover():
         key = os.environ.get(stem + "_API_KEY", "")
         url = base.rstrip("/") + "/models"
         req = urllib.request.Request(url)
+        # 部分上游的 WAF 按 UA 拦截(Cloudflare 1010 拒 python-urllib), 伪装成常规客户端
+        req.add_header("User-Agent", "OpenAI/Python")
         if key:
             req.add_header("Authorization", f"Bearer {key}")
         try:

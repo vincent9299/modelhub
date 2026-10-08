@@ -36,6 +36,13 @@ model_list:
       model: openai/microsoft/mai-image-2.5-pro
       api_base: os.environ/OPENROUTER_API_BASE
       api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: openrouter/openai/gpt-6-sol
+    litellm_params:
+      model: openai/openai/gpt-6-sol
+      api_base: os.environ/OPENROUTER_API_BASE
+      api_key: os.environ/OPENROUTER_API_KEY
+      
   # qianwen2 列表外模型（上游注册名 qwen-image-3.0-pro，调用名保持无点号）。
   # compatible-mode chat 回包为 DashScope 原生格式（choices 空、图在 output），
   # openai 兼容解析不可用，改走 litellm dashscope 原生 provider 的多模态生成端点:
@@ -45,8 +52,26 @@ model_list:
       api_base: https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
       api_key: os.environ/QIANWEN2_API_KEY
 
+
+  # LiteLLM 当前尚未识别这两个新型号的 reasoning_effort 支持。
+  # 显式许可调用方传入的值，避免被全局 drop_params 过滤；不设置默认档位。
+  - model_name: malasci/gpt-6-astra
+    litellm_params:
+      model: openai/gpt-6-astra
+      api_base: os.environ/MALASCI_API_BASE
+      api_key: os.environ/MALASCI_API_KEY
+      allowed_openai_params: [reasoning_effort]
+  - model_name: malasci/gpt-6.1-sol
+    litellm_params:
+      model: openai/gpt-6.1-sol
+      api_base: os.environ/MALASCI_API_BASE
+      api_key: os.environ/MALASCI_API_KEY
+      allowed_openai_params: [reasoning_effort]
+
   # ---- OpenRouter（由 gen_local_models.py 显式全量展开为 openrouter/<id>; 走静态出口）----
 
 litellm_settings:
   drop_params: true        # 上游不支持的 sampling 参数自动丢弃, 减少 400
   request_timeout: 600     # 长思考模型留足时间
+
+

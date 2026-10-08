@@ -160,6 +160,12 @@ Cline 设置里选 **OpenAI Compatible**：
 
 凭据全部 `os.environ/` 注入。加固定模型 = 在 `model_list` 加一条后 `bash restart.sh`。
 
+`malasci/gpt-6-astra` 和 `malasci/gpt-6.1-sol` 显式配置了
+`allowed_openai_params: [reasoning_effort]`：当前 LiteLLM 尚未识别这两个型号的
+推理参数支持，需要此许可才能在 `drop_params: true` 下保留调用方指定的档位。
+普通和流式 Chat Completions 请求均原样转发该值；未传时不注入默认值。
+固定配置优先于自动发现，重新生成运行时配置后仍会保留许可。
+
 ### 新增一个上游端点
 
 1. `.env` 加 `X_API_BASE` / `X_API_KEY`（X 任意前缀，如 `TOGETHER`）；
